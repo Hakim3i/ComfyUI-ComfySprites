@@ -77,6 +77,31 @@ class ComfySpritesDownloader:
         return (name,)
 
 
+class ComfySpritesDownloadOutput:
+    """Terminal output node for the asset-download workflow (satisfies ComfyUI ``OUTPUT_NODE``)."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "message": (
+                    "STRING",
+                    {"default": "", "tooltip": "Wire from ComfySprites Downloader output."},
+                ),
+            }
+        }
+
+    RETURN_TYPES = ()
+    FUNCTION = "output"
+    OUTPUT_NODE = True
+    CATEGORY = "ComfySprites"
+
+    def output(self, message: str):
+        text = (message or "").strip() or "ok"
+        print(f"{_LOG} download workflow complete: {text}")
+        return {"ui": {"text": [text]}}
+
+
 class ComfySpritesEnsureLTXLoras:
     """Download LTX LoRAs from ``loras_json``, then pass model through unchanged."""
 
@@ -234,6 +259,7 @@ class ComfySpritesExportVideo:
 
 NODE_CLASS_MAPPINGS = {
     "ComfySpritesDownloader": ComfySpritesDownloader,
+    "ComfySpritesDownloadOutput": ComfySpritesDownloadOutput,
     "ComfySpritesEnsureLTXLoras": ComfySpritesEnsureLTXLoras,
     "ComfySpritesExportImage": ComfySpritesExportImage,
     "ComfySpritesExportAudio": ComfySpritesExportAudio,
@@ -242,6 +268,7 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ComfySpritesDownloader": "ComfySprites Downloader",
+    "ComfySpritesDownloadOutput": "ComfySprites Download Output",
     "ComfySpritesEnsureLTXLoras": "ComfySprites Ensure LTX LoRAs",
     "ComfySpritesExportImage": "ComfySprites Export Image",
     "ComfySpritesExportAudio": "ComfySprites Export Audio",
