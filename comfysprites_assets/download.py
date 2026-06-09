@@ -24,6 +24,22 @@ def _format_mb(n: int) -> str:
     return f"{n / (1024 * 1024):.1f} MB"
 
 
+def _format_download_error(exc: Exception | None) -> str:
+    if exc is None:
+        return "unknown error"
+    if isinstance(exc, urllib.error.HTTPError):
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", errors="replace")[:240]
+        except Exception:
+            pass
+        detail = f"HTTP {exc.code} {exc.reason}"
+        if body:
+            detail = f"{detail}: {body}"
+        return detail
+    return str(exc)
+
+
 def _download_file(
     url: str,
     target: Path,
@@ -40,8 +56,9 @@ def _download_file(
     if is_civitai_url(url):
         token = (civitai_token or "").strip()
         if token:
+            # Query token only — do not send Authorization on Civitai URLs. urllib
+            # forwards that header to the S3/R2 redirect target and S3 returns 400.
             request_url = civitai_authenticated_url(url, token)
-            headers["Authorization"] = f"Bearer {token}"
     elif is_huggingface_url(url):
         token = (hf_token or "").strip()
         if token:
@@ -108,11 +125,6 @@ def ensure_lora_file(
     last_error: Exception | None = None
     for idx, url in enumerate(urls):
         src = "huggingface" if is_huggingface_url(url) else "civitai"
-        if src == "civitai" and not civitai_token:
-            raise RuntimeError(
-                f"{_LOG} {filename!r}: Civitai download requires a token. "
-                "Set Civitai API key in ComfySprites Settings."
-            )
         try:
             if idx:
                 print(f"{_LOG} retrying with {src} mirror ({idx + 1}/{len(urls)})")
@@ -126,24 +138,14 @@ def ensure_lora_file(
             )
             last_error = None
             break
-        except urllib.error.HTTPError as exc:
-            last_error = exc
-            body = ""
-            try:
-                body = exc.read().decode("utf-8", errors="replace")[:240]
-            except Exception:
-                pass
-            detail = f"HTTP {exc.code} {exc.reason}"
-            if body:
-                detail = f"{detail}: {body}"
-            print(f"{_LOG} DOWNLOAD FAILED: {detail} ({url})")
         except Exception as exc:
             last_error = exc
-            print(f"{_LOG} DOWNLOAD FAILED: {exc} ({url})")
+            print(f"{_LOG} DOWNLOAD FAILED: {_format_download_error(exc)} ({url})")
 
     if not target.is_file():
-        detail = str(last_error) if last_error else "unknown error"
-        raise RuntimeError(f"{_LOG} could not download {filename!r}: {detail}")
+        raise RuntimeError(
+            f"{_LOG} could not download {filename!r}: {_format_download_error(last_error)}"
+        )
     return target
 
 
@@ -200,11 +202,6 @@ def ensure_controlnet_file(
     last_error: Exception | None = None
     for idx, url in enumerate(urls):
         src = "huggingface" if is_huggingface_url(url) else "civitai"
-        if src == "civitai" and not civitai_token:
-            raise RuntimeError(
-                f"{_CN_LOG} {filename!r}: Civitai download requires a token. "
-                "Set Civitai API key in ComfySprites Settings."
-            )
         try:
             if idx:
                 print(f"{_CN_LOG} retrying with {src} mirror ({idx + 1}/{len(urls)})")
@@ -220,10 +217,11 @@ def ensure_controlnet_file(
             break
         except Exception as exc:
             last_error = exc
-            print(f"{_CN_LOG} DOWNLOAD FAILED: {exc} ({url})")
+            print(f"{_CN_LOG} DOWNLOAD FAILED: {_format_download_error(exc)} ({url})")
     if not target.is_file():
-        detail = str(last_error) if last_error else "unknown error"
-        raise RuntimeError(f"{_CN_LOG} could not download {filename!r}: {detail}")
+        raise RuntimeError(
+            f"{_CN_LOG} could not download {filename!r}: {_format_download_error(last_error)}"
+        )
     return target
 
 
@@ -286,11 +284,6 @@ def ensure_checkpoint_file(
     last_error: Exception | None = None
     for idx, url in enumerate(urls):
         src = "huggingface" if is_huggingface_url(url) else "civitai"
-        if src == "civitai" and not civitai_token:
-            raise RuntimeError(
-                f"{_CKPT_LOG} {filename!r}: Civitai download requires a token. "
-                "Set Civitai API key in ComfySprites Settings."
-            )
         try:
             if idx:
                 print(f"{_CKPT_LOG} retrying with {src} mirror ({idx + 1}/{len(urls)})")
@@ -304,24 +297,14 @@ def ensure_checkpoint_file(
             )
             last_error = None
             break
-        except urllib.error.HTTPError as exc:
-            last_error = exc
-            body = ""
-            try:
-                body = exc.read().decode("utf-8", errors="replace")[:240]
-            except Exception:
-                pass
-            detail = f"HTTP {exc.code} {exc.reason}"
-            if body:
-                detail = f"{detail}: {body}"
-            print(f"{_CKPT_LOG} DOWNLOAD FAILED: {detail} ({url})")
         except Exception as exc:
             last_error = exc
-            print(f"{_CKPT_LOG} DOWNLOAD FAILED: {exc} ({url})")
+            print(f"{_CKPT_LOG} DOWNLOAD FAILED: {_format_download_error(exc)} ({url})")
 
     if not target.is_file():
-        detail = str(last_error) if last_error else "unknown error"
-        raise RuntimeError(f"{_CKPT_LOG} could not download {filename!r}: {detail}")
+        raise RuntimeError(
+            f"{_CKPT_LOG} could not download {filename!r}: {_format_download_error(last_error)}"
+        )
     return target
 
 
