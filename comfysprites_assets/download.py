@@ -7,7 +7,12 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from .download_utils import download_candidates
+from .download_utils import (
+    civitai_authenticated_url,
+    download_candidates,
+    is_civitai_url,
+    is_huggingface_url,
+)
 from .paths import checkpoints_dir, controlnet_dir, loras_dir
 
 _LOG = "[ComfySprites LoRA]"
@@ -19,11 +24,6 @@ def _format_mb(n: int) -> str:
     return f"{n / (1024 * 1024):.1f} MB"
 
 
-def _is_huggingface_url(url: str) -> bool:
-    low = (url or "").lower()
-    return "huggingface.co" in low or "hf.co" in low
-
-
 def _download_file(
     url: str,
     target: Path,
@@ -31,25 +31,30 @@ def _download_file(
     civitai_token: str,
     hf_token: str,
     label: str,
+    log: str = _LOG,
 ) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(target.suffix + ".part")
-    headers = {"User-Agent": "comfyui-coomfy/3.0"}
-    if _is_huggingface_url(url):
-        token = (hf_token or "").strip()
-    else:
+    headers = {"User-Agent": "comfyui-comfysprites/1.0"}
+    request_url = url
+    if is_civitai_url(url):
         token = (civitai_token or "").strip()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, headers=headers)
-    print(f"{_LOG} DOWNLOAD START")
-    print(f"{_LOG}   Asset: {label}")
-    print(f"{_LOG}   URL:  {url}")
-    print(f"{_LOG}   Save: {target}")
+        if token:
+            request_url = civitai_authenticated_url(url, token)
+            headers["Authorization"] = f"Bearer {token}"
+    elif is_huggingface_url(url):
+        token = (hf_token or "").strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(request_url, headers=headers)
+    print(f"{log} DOWNLOAD START")
+    print(f"{log}   Asset: {label}")
+    print(f"{log}   URL:  {url}")
+    print(f"{log}   Save: {target}")
     with urllib.request.urlopen(req, timeout=600) as resp:
         total = int(resp.headers.get("Content-Length") or 0)
         if total:
-            print(f"{_LOG}   Size: {_format_mb(total)}")
+            print(f"{log}   Size: {_format_mb(total)}")
         downloaded = 0
         with open(tmp, "wb") as handle:
             while True:
@@ -61,14 +66,14 @@ def _download_file(
                 if total > 0:
                     pct = min(100, downloaded * 100 // total)
                     print(
-                        f"{_LOG}   Progress: {_format_mb(downloaded)} / "
+                        f"{log}   Progress: {_format_mb(downloaded)} / "
                         f"{_format_mb(total)} ({pct}%)",
                         end="\r",
                         flush=True,
                     )
         print()
     tmp.replace(target)
-    print(f"{_LOG} DOWNLOAD OK -> {target.name}")
+    print(f"{log} DOWNLOAD OK -> {target.name}")
 
 
 def ensure_lora_file(
@@ -102,7 +107,7 @@ def ensure_lora_file(
     hf_token = (hf_token or "").strip()
     last_error: Exception | None = None
     for idx, url in enumerate(urls):
-        src = "huggingface" if _is_huggingface_url(url) else "civitai"
+        src = "huggingface" if is_huggingface_url(url) else "civitai"
         if src == "civitai" and not civitai_token:
             raise RuntimeError(
                 f"{_LOG} {filename!r}: Civitai download requires a token. "
@@ -117,12 +122,21 @@ def ensure_lora_file(
                 civitai_token=civitai_token,
                 hf_token=hf_token,
                 label=str(name),
+                log=_LOG,
             )
             last_error = None
             break
         except urllib.error.HTTPError as exc:
             last_error = exc
-            print(f"{_LOG} DOWNLOAD FAILED: HTTP {exc.code} {exc.reason} ({url})")
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", errors="replace")[:240]
+            except Exception:
+                pass
+            detail = f"HTTP {exc.code} {exc.reason}"
+            if body:
+                detail = f"{detail}: {body}"
+            print(f"{_LOG} DOWNLOAD FAILED: {detail} ({url})")
         except Exception as exc:
             last_error = exc
             print(f"{_LOG} DOWNLOAD FAILED: {exc} ({url})")
@@ -185,15 +199,22 @@ def ensure_controlnet_file(
     hf_token = (hf_token or "").strip()
     last_error: Exception | None = None
     for idx, url in enumerate(urls):
+        src = "huggingface" if is_huggingface_url(url) else "civitai"
+        if src == "civitai" and not civitai_token:
+            raise RuntimeError(
+                f"{_CN_LOG} {filename!r}: Civitai download requires a token. "
+                "Set Civitai API key in ComfySprites Settings."
+            )
         try:
             if idx:
-                print(f"{_CN_LOG} retrying mirror ({idx + 1}/{len(urls)})")
+                print(f"{_CN_LOG} retrying with {src} mirror ({idx + 1}/{len(urls)})")
             _download_file(
                 url,
                 target,
                 civitai_token=civitai_token,
                 hf_token=hf_token,
                 label=filename,
+                log=_CN_LOG,
             )
             last_error = None
             break
@@ -264,7 +285,7 @@ def ensure_checkpoint_file(
     hf_token = (hf_token or "").strip()
     last_error: Exception | None = None
     for idx, url in enumerate(urls):
-        src = "huggingface" if _is_huggingface_url(url) else "civitai"
+        src = "huggingface" if is_huggingface_url(url) else "civitai"
         if src == "civitai" and not civitai_token:
             raise RuntimeError(
                 f"{_CKPT_LOG} {filename!r}: Civitai download requires a token. "
@@ -279,12 +300,21 @@ def ensure_checkpoint_file(
                 civitai_token=civitai_token,
                 hf_token=hf_token,
                 label=str(name),
+                log=_CKPT_LOG,
             )
             last_error = None
             break
         except urllib.error.HTTPError as exc:
             last_error = exc
-            print(f"{_CKPT_LOG} DOWNLOAD FAILED: HTTP {exc.code} {exc.reason} ({url})")
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", errors="replace")[:240]
+            except Exception:
+                pass
+            detail = f"HTTP {exc.code} {exc.reason}"
+            if body:
+                detail = f"{detail}: {body}"
+            print(f"{_CKPT_LOG} DOWNLOAD FAILED: {detail} ({url})")
         except Exception as exc:
             last_error = exc
             print(f"{_CKPT_LOG} DOWNLOAD FAILED: {exc} ({url})")
