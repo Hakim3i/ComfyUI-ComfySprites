@@ -49,7 +49,8 @@ ComfySprites is the **prompt and metadata authority**; ComfyUI is the **compute 
 
 | Node | Photo / Video wiring |
 |------|----------------------|
-| **ComfySprites Ensure SDXL LoRAs** | Photo Studio node **`128`** (passthrough to Power Lora `101`) |
+| **ComfySprites Ensure SDXL LoRAs** | Photo Studio — bulk download before chained `ComfySpritesEnsureLoraLoader` nodes |
+| **ComfySprites Ensure LoRA Loader** | One LoRA per node (STRING `lora_name`); chain for style → character → partner → act |
 | **ComfySprites Ensure LTX LoRAs** | Video Studio — between diffusion `257` and Power Lora `314` (or baked-in node id in your export) |
 | **ComfySprites Export Image** | Photo Studio node **`132`** — strip metadata + compress before PreviewImage `131` |
 | **ComfySprites Export Audio** | Video Studio node **`319`** — audio prep before mux |

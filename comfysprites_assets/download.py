@@ -326,6 +326,35 @@ def ensure_checkpoints_from_json(
     return applied
 
 
+def lora_entry_for_name(
+    loras_json: str,
+    lora_name: str,
+) -> dict[str, Any] | None:
+    """Return the manifest row matching *lora_name*, if any."""
+    import json
+
+    name = (lora_name or "").strip()
+    if not name:
+        return None
+    raw = (loras_json or "").strip()
+    if not raw:
+        return None
+    try:
+        entries = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(entries, list):
+        return None
+    key = name.lower()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        filename = str(entry.get("filename") or "").strip()
+        if filename.lower() == key:
+            return entry
+    return None
+
+
 def checkpoint_entry_for_name(
     checkpoints_json: str,
     ckpt_name: str,

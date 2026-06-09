@@ -6,9 +6,11 @@ from .comfysprites_assets.download import (
     checkpoint_entry_for_name,
     ensure_checkpoint_file,
     ensure_controlnets_from_json,
+    ensure_lora_file,
     ensure_loras_from_json,
+    lora_entry_for_name,
 )
-from .comfysprites_assets.paths import checkpoints_dir
+from .comfysprites_assets.paths import checkpoints_dir, loras_dir
 from .comfysprites_export import export_audio, export_images, mux_video
 
 _LOG = "[ComfySprites ensure]"
@@ -209,11 +211,15 @@ class ComfySpritesEnsureCheckpointLoader:
 
     @classmethod
     def INPUT_TYPES(cls):
-        import folder_paths
-
         return {
             "required": {
-                "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
+                "ckpt_name": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": "Checkpoint filename under models/checkpoints/ (not a dropdown).",
+                    },
+                ),
                 "checkpoints_json": (
                     "STRING",
                     {
@@ -289,6 +295,112 @@ class ComfySpritesEnsureCheckpointLoader:
         )
         print(f"{_LOG} SDXL checkpoint loaded: {name}")
         return (out[0], out[1], out[2])
+
+
+class ComfySpritesEnsureLoraLoader:
+    """Download one LoRA if missing, apply it, return updated MODEL + CLIP."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "clip": ("CLIP",),
+                "lora_name": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": "LoRA filename under models/loras/ (not a dropdown).",
+                    },
+                ),
+                "strength_model": (
+                    "FLOAT",
+                    {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01},
+                ),
+                "strength_clip": (
+                    "FLOAT",
+                    {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01},
+                ),
+                "loras_json": (
+                    "STRING",
+                    {
+                        "multiline": True,
+                        "default": "[]",
+                        "tooltip": "JSON array of LoRA rows from ComfySprites /api/build.",
+                    },
+                ),
+                "civitai_token": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": "Injected by ComfySprites webapp from Settings.",
+                    },
+                ),
+                "hf_token": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": "Injected by ComfySprites webapp from Settings.",
+                    },
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("MODEL", "CLIP")
+    RETURN_NAMES = ("model", "clip")
+    FUNCTION = "load_lora"
+    CATEGORY = "ComfySprites"
+
+    def load_lora(
+        self,
+        model,
+        clip,
+        lora_name: str,
+        strength_model: float,
+        strength_clip: float,
+        loras_json: str,
+        civitai_token: str,
+        hf_token: str,
+    ):
+        import folder_paths
+        import comfy.sd
+        import comfy.utils
+
+        name = (lora_name or "").strip()
+        if not name:
+            raise RuntimeError(f"{_LOG} lora_name is empty")
+
+        entry = lora_entry_for_name(loras_json, name)
+        if entry is not None:
+            ensure_lora_file(
+                entry,
+                civitai_token=civitai_token or "",
+                hf_token=hf_token or "",
+            )
+        elif not (loras_dir() / name).is_file():
+            resolved = folder_paths.get_full_path("loras", name)
+            if not resolved:
+                raise RuntimeError(
+                    f"{_LOG} LoRA {name!r} not on disk and no manifest entry in loras_json"
+                )
+
+        lora_path = folder_paths.get_full_path("loras", name)
+        if not lora_path:
+            lora_path = str(loras_dir() / name)
+        from pathlib import Path
+
+        if not lora_path or not Path(lora_path).is_file():
+            raise RuntimeError(f"{_LOG} LoRA file missing after ensure: {name!r}")
+
+        lora = comfy.utils.load_torch_file(lora_path, safe_load=True)
+        model_lora, clip_lora = comfy.sd.load_lora_for_models(
+            model,
+            clip,
+            lora,
+            float(strength_model),
+            float(strength_clip),
+        )
+        return (model_lora, clip_lora)
 
 
 class ComfySpritesEnsureSDXLLoras:
@@ -453,6 +565,7 @@ class ComfySpritesEnsureControlNets:
 
 NODE_CLASS_MAPPINGS = {
     "ComfySpritesEnsureCheckpointLoader": ComfySpritesEnsureCheckpointLoader,
+    "ComfySpritesEnsureLoraLoader": ComfySpritesEnsureLoraLoader,
     "ComfySpritesEnsureSDXLLoras": ComfySpritesEnsureSDXLLoras,
     "ComfySpritesEnsureLTXLoras": ComfySpritesEnsureLTXLoras,
     "ComfySpritesEnsureControlNets": ComfySpritesEnsureControlNets,
@@ -463,6 +576,7 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ComfySpritesEnsureCheckpointLoader": "ComfySprites Ensure Checkpoint Loader",
+    "ComfySpritesEnsureLoraLoader": "ComfySprites Ensure LoRA Loader",
     "ComfySpritesEnsureSDXLLoras": "ComfySprites Ensure SDXL LoRAs",
     "ComfySpritesEnsureLTXLoras": "ComfySprites Ensure LTX LoRAs",
     "ComfySpritesEnsureControlNets": "ComfySprites Ensure ControlNets",

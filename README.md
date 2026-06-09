@@ -10,7 +10,8 @@ LoRA download support for **ComfySprites** Make and Video Lab. The ComfySprites 
 | Node | Role |
 |------|------|
 | **ComfySprites Ensure Checkpoint Loader** | Download SDXL checkpoints from `checkpoints_json`, then load `MODEL` + `CLIP` + `VAE` |
-| **ComfySprites Ensure SDXL LoRAs** | Download SDXL LoRAs from `loras_json`, pass `MODEL` + `CLIP` through |
+| **ComfySprites Ensure LoRA Loader** | Download one LoRA, apply to `MODEL` + `CLIP` (STRING filename; chain for stacks) |
+| **ComfySprites Ensure SDXL LoRAs** | Download all SDXL LoRAs from `loras_json`, pass `MODEL` + `CLIP` through |
 | **ComfySprites Ensure LTX LoRAs** | Download LTX LoRAs from `loras_json`, pass `MODEL` through |
 | **ComfySprites Export Image** | Strip metadata and compress stills (WebP/JPEG/PNG) before ComfySprites download |
 | **ComfySprites Export Audio** | Resample / downmix audio before video mux |
