@@ -35,6 +35,14 @@ class ComfySpritesDownloader:
                     "STRING",
                     {"multiline": True, "default": "[]"},
                 ),
+                "upscalers_json": (
+                    "STRING",
+                    {"multiline": True, "default": "[]"},
+                ),
+                "detailers_json": (
+                    "STRING",
+                    {"multiline": True, "default": "[]"},
+                ),
                 "civitai_token": ("STRING", {"default": ""}),
                 "hf_token": ("STRING", {"default": ""}),
             }
@@ -51,16 +59,43 @@ class ComfySpritesDownloader:
         checkpoints_json: str,
         loras_json: str,
         controlnets_json: str,
+        upscalers_json: str,
+        detailers_json: str,
         civitai_token: str,
         hf_token: str,
     ):
+        try:
+            from comfy.utils import ProgressBar
+        except ImportError:
+            ProgressBar = None  # type: ignore[misc, assignment]
+
+        from .comfysprites_assets.download import count_pending_assets
+
+        pending = count_pending_assets(
+            checkpoints_json=checkpoints_json,
+            loras_json=loras_json,
+            controlnets_json=controlnets_json,
+            upscalers_json=upscalers_json,
+            detailers_json=detailers_json,
+        )
+        pbar = ProgressBar(pending) if ProgressBar is not None and pending > 0 else None
+
+        def _on_asset_progress(frac: float) -> None:
+            if pbar is not None:
+                pbar.update_absolute(int(round(frac * pending)), pending)
+
         applied = ensure_all_assets(
             checkpoints_json=checkpoints_json,
             loras_json=loras_json,
             controlnets_json=controlnets_json,
+            upscalers_json=upscalers_json,
+            detailers_json=detailers_json,
             civitai_token=civitai_token or "",
             hf_token=hf_token or "",
+            on_progress=_on_asset_progress if pbar is not None else None,
         )
+        if pbar is not None:
+            pbar.update_absolute(pending, pending)
         name = (ckpt_name or "").strip()
         if not name:
             raise RuntimeError(f"{_LOG} ckpt_name is empty")
@@ -71,6 +106,10 @@ class ComfySpritesDownloader:
             parts.append(f"loras={', '.join(applied['loras'])}")
         if applied["controlnets"]:
             parts.append(f"controlnets={', '.join(applied['controlnets'])}")
+        if applied["upscalers"]:
+            parts.append(f"upscalers={', '.join(applied['upscalers'])}")
+        if applied["detailers"]:
+            parts.append(f"detailers={', '.join(applied['detailers'])}")
         if parts:
             print(f"{_LOG} downloaded: {'; '.join(parts)}")
         print(f"{_LOG} assets ready; inference checkpoint: {name}")

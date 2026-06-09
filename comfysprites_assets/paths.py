@@ -44,3 +44,42 @@ def checkpoints_dir() -> Path:
     except Exception:
         pass
     return PACKAGE_DIR.parent.parent / "models" / "checkpoints"
+
+
+def upscale_models_dir() -> Path:
+    """Resolve ComfyUI ``models/upscale_models``."""
+    try:
+        import folder_paths  # type: ignore[import-not-found]
+
+        paths = folder_paths.get_folder_paths("upscale_models")
+        if paths:
+            return Path(paths[0])
+    except Exception:
+        pass
+    return PACKAGE_DIR.parent.parent / "models" / "upscale_models"
+
+
+def ultralytics_dir() -> Path:
+    """Resolve ComfyUI ``models/ultralytics`` (Impact Pack detailer detectors)."""
+    try:
+        import folder_paths  # type: ignore[import-not-found]
+
+        paths = folder_paths.get_folder_paths("ultralytics")
+        if paths:
+            return Path(paths[0])
+    except Exception:
+        pass
+    return PACKAGE_DIR.parent.parent / "models" / "ultralytics"
+
+
+def sams_dir() -> Path:
+    """Resolve ComfyUI ``models/sams`` (Impact Pack SAM weights)."""
+    try:
+        import folder_paths  # type: ignore[import-not-found]
+
+        paths = folder_paths.get_folder_paths("sams")
+        if paths:
+            return Path(paths[0])
+    except Exception:
+        pass
+    return PACKAGE_DIR.parent.parent / "models" / "sams"

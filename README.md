@@ -15,7 +15,7 @@ Asset download + export nodes for **ComfySprites** Make.
 
 | Node | Role |
 |------|------|
-| **ComfySprites Downloader** | Download checkpoints, LoRAs, ControlNets from JSON manifests |
+| **ComfySprites Downloader** | Download checkpoints, LoRAs, ControlNets, upscalers, detailer models from JSON manifests |
 | **ComfySprites Ensure LTX LoRAs** | Bulk LTX LoRA download (legacy) |
 | **ComfySprites Export Image / Audio / Video** | Metadata-free export helpers |
 
@@ -27,6 +27,8 @@ Asset download + export nodes for **ComfySprites** Make.
 | `checkpoints_json` | Missing checkpoint rows |
 | `loras_json` | Missing LoRA rows |
 | `controlnets_json` | Missing ControlNet rows |
+| `upscalers_json` | Missing upscale model rows |
+| `detailers_json` | Missing Impact Pack ultralytics / SAM rows |
 | `civitai_token` / `hf_token` | From ComfySprites Settings |
 
 Ensure nodes **do not** read tokens from the ComfyUI process environment.
