@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from .comfysprites_assets.download import ensure_all_assets
 from .comfysprites_assets.download import ensure_loras_from_json
-from .comfysprites_assets.paths import checkpoints_dir, controlnet_dir, loras_dir
 from .comfysprites_export import export_audio, export_images, mux_video
 
 _LOG = "[ComfySprites]"
@@ -76,175 +75,6 @@ class ComfySpritesDownloader:
             print(f"{_LOG} downloaded: {'; '.join(parts)}")
         print(f"{_LOG} assets ready; inference checkpoint: {name}")
         return (name,)
-
-
-class ComfySpritesSDXLLoader:
-    """Load an SDXL checkpoint that is already on disk (after Downloader)."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "ckpt_name": (
-                    "STRING",
-                    {"default": "", "tooltip": "Checkpoint filename under models/checkpoints/."},
-                ),
-                "assets_ready": (
-                    "STRING",
-                    {
-                        "default": "",
-                        "tooltip": "Wire from Downloader output so loads run after downloads.",
-                    },
-                ),
-            }
-        }
-
-    RETURN_TYPES = ("MODEL", "CLIP", "VAE")
-    RETURN_NAMES = ("model", "clip", "vae")
-    FUNCTION = "load_checkpoint"
-    CATEGORY = "ComfySprites"
-
-    def load_checkpoint(self, ckpt_name: str, assets_ready: str):
-        import folder_paths
-        import comfy.sd
-        from pathlib import Path
-
-        del assets_ready
-        name = (ckpt_name or "").strip()
-        if not name:
-            raise RuntimeError(f"{_LOG} ckpt_name is empty")
-
-        ckpt_path = folder_paths.get_full_path("checkpoints", name)
-        if not ckpt_path:
-            ckpt_path = str(checkpoints_dir() / name)
-        if not ckpt_path or not Path(ckpt_path).is_file():
-            raise RuntimeError(
-                f"{_LOG} checkpoint {name!r} not found under models/checkpoints/"
-            )
-
-        out = comfy.sd.load_checkpoint_guess_config(
-            ckpt_path,
-            output_vae=True,
-            output_clip=True,
-            embedding_directory=folder_paths.get_folder_paths("embeddings"),
-        )
-        print(f"{_LOG} SDXL checkpoint loaded: {name}")
-        return (out[0], out[1], out[2])
-
-
-class ComfySpritesLoraLoader:
-    """Apply one LoRA (files must already exist; use Downloader first)."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "model": ("MODEL",),
-                "clip": ("CLIP",),
-                "lora_name": (
-                    "STRING",
-                    {"default": "", "tooltip": "LoRA filename under models/loras/."},
-                ),
-                "strength_model": (
-                    "FLOAT",
-                    {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01},
-                ),
-                "strength_clip": (
-                    "FLOAT",
-                    {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01},
-                ),
-            }
-        }
-
-    RETURN_TYPES = ("MODEL", "CLIP")
-    RETURN_NAMES = ("model", "clip")
-    FUNCTION = "load_lora"
-    CATEGORY = "ComfySprites"
-
-    def load_lora(
-        self,
-        model,
-        clip,
-        lora_name: str,
-        strength_model: float,
-        strength_clip: float,
-    ):
-        import folder_paths
-        import comfy.sd
-        import comfy.utils
-        from pathlib import Path
-
-        name = (lora_name or "").strip()
-        if not name:
-            raise RuntimeError(f"{_LOG} lora_name is empty")
-
-        lora_path = folder_paths.get_full_path("loras", name)
-        if not lora_path:
-            lora_path = str(loras_dir() / name)
-        if not lora_path or not Path(lora_path).is_file():
-            raise RuntimeError(f"{_LOG} LoRA {name!r} not found under models/loras/")
-
-        lora = comfy.utils.load_torch_file(lora_path, safe_load=True)
-        model_lora, clip_lora = comfy.sd.load_lora_for_models(
-            model,
-            clip,
-            lora,
-            float(strength_model),
-            float(strength_clip),
-        )
-        return (model_lora, clip_lora)
-
-
-class ComfySpritesControlNetLoader:
-    """Load a ControlNet file already on disk (after Downloader)."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "control_net_name": (
-                    "STRING",
-                    {
-                        "default": "",
-                        "tooltip": "ControlNet filename under models/controlnet/.",
-                    },
-                ),
-                "assets_ready": (
-                    "STRING",
-                    {
-                        "default": "",
-                        "tooltip": "Wire from Downloader output so loads run after downloads.",
-                    },
-                ),
-            }
-        }
-
-    RETURN_TYPES = ("CONTROL_NET",)
-    RETURN_NAMES = ("control_net",)
-    FUNCTION = "load_controlnet"
-    CATEGORY = "ComfySprites"
-
-    def load_controlnet(self, control_net_name: str, assets_ready: str):
-        import folder_paths
-        import comfy.controlnet
-        from pathlib import Path
-
-        del assets_ready
-        name = (control_net_name or "").strip()
-        if not name:
-            raise RuntimeError(f"{_LOG} control_net_name is empty")
-
-        cn_path = folder_paths.get_full_path("controlnet", name)
-        if not cn_path:
-            cn_path = str(controlnet_dir() / name)
-        if not cn_path or not Path(cn_path).is_file():
-            raise RuntimeError(
-                f"{_LOG} ControlNet {name!r} not found under models/controlnet/"
-            )
-
-        controlnet = comfy.controlnet.load_controlnet(cn_path)
-        print(f"{_LOG} ControlNet loaded: {name}")
-        return (controlnet,)
 
 
 class ComfySpritesEnsureLTXLoras:
@@ -404,9 +234,6 @@ class ComfySpritesExportVideo:
 
 NODE_CLASS_MAPPINGS = {
     "ComfySpritesDownloader": ComfySpritesDownloader,
-    "ComfySpritesSDXLLoader": ComfySpritesSDXLLoader,
-    "ComfySpritesLoraLoader": ComfySpritesLoraLoader,
-    "ComfySpritesControlNetLoader": ComfySpritesControlNetLoader,
     "ComfySpritesEnsureLTXLoras": ComfySpritesEnsureLTXLoras,
     "ComfySpritesExportImage": ComfySpritesExportImage,
     "ComfySpritesExportAudio": ComfySpritesExportAudio,
@@ -415,9 +242,6 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ComfySpritesDownloader": "ComfySprites Downloader",
-    "ComfySpritesSDXLLoader": "ComfySprites SDXL Loader",
-    "ComfySpritesLoraLoader": "ComfySprites LoRA Loader",
-    "ComfySpritesControlNetLoader": "ComfySprites ControlNet Loader",
     "ComfySpritesEnsureLTXLoras": "ComfySprites Ensure LTX LoRAs",
     "ComfySpritesExportImage": "ComfySprites Export Image",
     "ComfySpritesExportAudio": "ComfySprites Export Audio",

@@ -1,38 +1,32 @@
 # ComfyUI-ComfySprites
 
-Asset download + SDXL load support for **ComfySprites** Make and Video Lab.
+Asset download + export nodes for **ComfySprites** Make.
 
 - **Editor:** https://github.com/Hakim3i/ComfySprites
 - **This pack:** https://github.com/Hakim3i/ComfyUI-ComfySprites
 
-## Photo Studio flow
+## Make flow (two-phase)
 
-```
-ComfySprites Downloader  →  ComfySprites SDXL Loader  →  ComfySprites LoRA Loader (chain)  →  …
-```
-
-1. **Downloader** — one node; downloads all checkpoints, LoRAs, and ControlNets from JSON manifests + API keys; outputs inference `ckpt_name`.
-2. **SDXL Loader** — loads `ckpt_name` (wire `assets_ready` from Downloader for ordering).
-3. **LoRA Loader** — apply one LoRA per node; chain for style → character → partner → act.
+1. **Webapp preflight** — compare required models vs `GET /models/*` on ComfyUI.
+2. **Download workflow** — if anything is missing, queue a single `ComfySpritesDownloader` node.
+3. **Make workflow** — standard ComfyUI `CheckpointLoaderSimple`, `LoraLoader`, `ControlNetLoader`, etc.
 
 ## Nodes
 
 | Node | Role |
 |------|------|
-| **ComfySprites Downloader** | Download all assets; output inference checkpoint filename |
-| **ComfySprites SDXL Loader** | Load checkpoint MODEL + CLIP + VAE (after Downloader) |
-| **ComfySprites LoRA Loader** | Apply one LoRA (chain for stacks) |
-| **ComfySprites Ensure LTX LoRAs** | Video Lab LTX LoRA bulk download (passthrough) |
+| **ComfySprites Downloader** | Download checkpoints, LoRAs, ControlNets from JSON manifests |
+| **ComfySprites Ensure LTX LoRAs** | Bulk LTX LoRA download (legacy) |
 | **ComfySprites Export Image / Audio / Video** | Metadata-free export helpers |
 
 ### Downloader inputs (injected by ComfySprites webapp)
 
 | Input | Description |
 |-------|-------------|
-| `ckpt_name` | Inference checkpoint filename |
-| `checkpoints_json` | All checkpoint rows (inference + refine) |
-| `loras_json` | All SDXL LoRA rows |
-| `controlnets_json` | ControlNet weight rows |
+| `ckpt_name` | Inference checkpoint filename (required by node) |
+| `checkpoints_json` | Missing checkpoint rows |
+| `loras_json` | Missing LoRA rows |
+| `controlnets_json` | Missing ControlNet rows |
 | `civitai_token` / `hf_token` | From ComfySprites Settings |
 
 Ensure nodes **do not** read tokens from the ComfyUI process environment.
