@@ -326,6 +326,36 @@ def ensure_checkpoints_from_json(
     return applied
 
 
+def ensure_all_assets(
+    *,
+    checkpoints_json: str = "",
+    loras_json: str = "",
+    controlnets_json: str = "",
+    civitai_token: str = "",
+    hf_token: str = "",
+) -> dict[str, list[str]]:
+    """Download every asset listed in the three JSON manifests."""
+    civitai_token = (civitai_token or "").strip()
+    hf_token = (hf_token or "").strip()
+    return {
+        "checkpoints": ensure_checkpoints_from_json(
+            checkpoints_json,
+            civitai_token=civitai_token,
+            hf_token=hf_token,
+        ),
+        "loras": ensure_loras_from_json(
+            loras_json,
+            civitai_token=civitai_token,
+            hf_token=hf_token,
+        ),
+        "controlnets": ensure_controlnets_from_json(
+            controlnets_json,
+            civitai_token=civitai_token,
+            hf_token=hf_token,
+        ),
+    }
+
+
 def lora_entry_for_name(
     loras_json: str,
     lora_name: str,

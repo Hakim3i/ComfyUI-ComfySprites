@@ -1,6 +1,7 @@
-"""LoRA download helpers for ComfyUI-ComfySprites ensure nodes."""
+"""Asset download helpers for ComfyUI-ComfySprites."""
 
 from .download import (
+    ensure_all_assets,
     ensure_checkpoint_file,
     ensure_checkpoints_from_json,
     ensure_lora_file,
@@ -12,6 +13,7 @@ from .paths import checkpoints_dir, loras_dir
 __all__ = [
     "checkpoints_dir",
     "download_candidates",
+    "ensure_all_assets",
     "ensure_checkpoint_file",
     "ensure_checkpoints_from_json",
     "ensure_lora_file",
