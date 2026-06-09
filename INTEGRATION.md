@@ -61,7 +61,7 @@ Before `POST /prompt`, ComfySprites ([`../webapp/comfyui/inject_assets.py`](../w
 - `civitai_token` / `hf_token` — from [`load_api_keys()`](../webapp/env_settings.py)
 - `enabled` on export nodes — from `request.export_compress` (defaults **on**; UI toggle planned)
 
-**v1:** LoRAs only (checkpoints must already be on the ComfyUI host).
+**v1:** SDXL checkpoints, LoRAs, and ControlNets auto-download on the ComfyUI host when manifest rows include `download_url` or `version_id`. VAE / upscale weights are not auto-downloaded.
 
 ### Install
 

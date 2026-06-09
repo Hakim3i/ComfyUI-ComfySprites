@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from .comfysprites_assets.download import ensure_controlnets_from_json, ensure_loras_from_json
+from .comfysprites_assets.download import (
+    checkpoint_entry_for_name,
+    ensure_checkpoint_file,
+    ensure_controlnets_from_json,
+    ensure_loras_from_json,
+)
+from .comfysprites_assets.paths import checkpoints_dir
 from .comfysprites_export import export_audio, export_images, mux_video
 
 _LOG = "[ComfySprites ensure]"
@@ -198,6 +204,93 @@ class ComfySpritesExportVideo:
         }
 
 
+class ComfySpritesEnsureCheckpointLoader:
+    """Download SDXL checkpoint if missing, then load MODEL + CLIP + VAE."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        import folder_paths
+
+        return {
+            "required": {
+                "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
+                "checkpoints_json": (
+                    "STRING",
+                    {
+                        "multiline": True,
+                        "default": "[]",
+                        "tooltip": "JSON array of checkpoint rows from ComfySprites /api/build.",
+                    },
+                ),
+                "civitai_token": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": "Injected by ComfySprites webapp from Settings.",
+                    },
+                ),
+                "hf_token": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": "Injected by ComfySprites webapp from Settings.",
+                    },
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("MODEL", "CLIP", "VAE")
+    RETURN_NAMES = ("model", "clip", "vae")
+    FUNCTION = "load_checkpoint"
+    CATEGORY = "ComfySprites"
+
+    def load_checkpoint(
+        self,
+        ckpt_name: str,
+        checkpoints_json: str,
+        civitai_token: str,
+        hf_token: str,
+    ):
+        import folder_paths
+        import comfy.sd
+
+        name = (ckpt_name or "").strip()
+        if not name:
+            raise RuntimeError(f"{_LOG} ckpt_name is empty")
+
+        entry = checkpoint_entry_for_name(checkpoints_json, name)
+        if entry is not None:
+            ensure_checkpoint_file(
+                entry,
+                civitai_token=civitai_token or "",
+                hf_token=hf_token or "",
+            )
+        elif not (checkpoints_dir() / name).is_file():
+            resolved = folder_paths.get_full_path("checkpoints", name)
+            if not resolved:
+                raise RuntimeError(
+                    f"{_LOG} checkpoint {name!r} not on disk and no manifest entry in "
+                    "checkpoints_json"
+                )
+
+        ckpt_path = folder_paths.get_full_path("checkpoints", name)
+        if not ckpt_path:
+            ckpt_path = str(checkpoints_dir() / name)
+        from pathlib import Path
+
+        if not ckpt_path or not Path(ckpt_path).is_file():
+            raise RuntimeError(f"{_LOG} checkpoint file missing after ensure: {name!r}")
+
+        out = comfy.sd.load_checkpoint_guess_config(
+            ckpt_path,
+            output_vae=True,
+            output_clip=True,
+            embedding_directory=folder_paths.get_folder_paths("embeddings"),
+        )
+        print(f"{_LOG} SDXL checkpoint loaded: {name}")
+        return (out[0], out[1], out[2])
+
+
 class ComfySpritesEnsureSDXLLoras:
     """Download SDXL LoRAs from ``loras_json``, then pass model/clip through unchanged."""
 
@@ -359,6 +452,7 @@ class ComfySpritesEnsureControlNets:
 
 
 NODE_CLASS_MAPPINGS = {
+    "ComfySpritesEnsureCheckpointLoader": ComfySpritesEnsureCheckpointLoader,
     "ComfySpritesEnsureSDXLLoras": ComfySpritesEnsureSDXLLoras,
     "ComfySpritesEnsureLTXLoras": ComfySpritesEnsureLTXLoras,
     "ComfySpritesEnsureControlNets": ComfySpritesEnsureControlNets,
@@ -368,6 +462,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "ComfySpritesEnsureCheckpointLoader": "ComfySprites Ensure Checkpoint Loader",
     "ComfySpritesEnsureSDXLLoras": "ComfySprites Ensure SDXL LoRAs",
     "ComfySpritesEnsureLTXLoras": "ComfySprites Ensure LTX LoRAs",
     "ComfySpritesEnsureControlNets": "ComfySprites Ensure ControlNets",

@@ -31,3 +31,16 @@ def controlnet_dir() -> Path:
     except Exception:
         pass
     return PACKAGE_DIR.parent.parent / "models" / "controlnet"
+
+
+def checkpoints_dir() -> Path:
+    """Resolve ComfyUI ``models/checkpoints``."""
+    try:
+        import folder_paths  # type: ignore[import-not-found]
+
+        paths = folder_paths.get_folder_paths("checkpoints")
+        if paths:
+            return Path(paths[0])
+    except Exception:
+        pass
+    return PACKAGE_DIR.parent.parent / "models" / "checkpoints"

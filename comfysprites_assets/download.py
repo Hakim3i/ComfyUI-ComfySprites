@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from .download_utils import download_candidates
-from .paths import controlnet_dir, loras_dir
+from .paths import checkpoints_dir, controlnet_dir, loras_dir
 
 _LOG = "[ComfySprites LoRA]"
 _CN_LOG = "[ComfySprites ControlNet]"
+_CKPT_LOG = "[ComfySprites Checkpoint]"
 
 
 def _format_mb(n: int) -> str:
@@ -42,7 +43,7 @@ def _download_file(
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, headers=headers)
     print(f"{_LOG} DOWNLOAD START")
-    print(f"{_LOG}   LoRA: {label}")
+    print(f"{_LOG}   Asset: {label}")
     print(f"{_LOG}   URL:  {url}")
     print(f"{_LOG}   Save: {target}")
     with urllib.request.urlopen(req, timeout=600) as resp:
@@ -233,3 +234,122 @@ def ensure_controlnets_from_json(
         )
         applied.append(path.name)
     return applied
+
+
+def ensure_checkpoint_file(
+    info: dict[str, Any],
+    *,
+    civitai_token: str = "",
+    hf_token: str = "",
+) -> Path:
+    """Ensure ``info['filename']`` exists under ``models/checkpoints/``."""
+    filename = info.get("filename")
+    name = info.get("name") or filename or "?"
+    if not filename or not str(filename).strip():
+        raise RuntimeError(f"{_CKPT_LOG} catalog entry missing filename ({name!r})")
+    filename = str(filename).strip()
+    target = checkpoints_dir() / filename
+    if target.is_file():
+        print(f"{_CKPT_LOG} {filename}: on disk ({_format_mb(target.stat().st_size)})")
+        return target
+
+    urls = download_candidates(info)
+    if not urls:
+        raise RuntimeError(
+            f"{_CKPT_LOG} {filename!r}: missing download_url and version_id; "
+            "add a download URL on the Style row in ComfySprites."
+        )
+
+    civitai_token = (civitai_token or "").strip()
+    hf_token = (hf_token or "").strip()
+    last_error: Exception | None = None
+    for idx, url in enumerate(urls):
+        src = "huggingface" if _is_huggingface_url(url) else "civitai"
+        if src == "civitai" and not civitai_token:
+            raise RuntimeError(
+                f"{_CKPT_LOG} {filename!r}: Civitai download requires a token. "
+                "Set Civitai API key in ComfySprites Settings."
+            )
+        try:
+            if idx:
+                print(f"{_CKPT_LOG} retrying with {src} mirror ({idx + 1}/{len(urls)})")
+            _download_file(
+                url,
+                target,
+                civitai_token=civitai_token,
+                hf_token=hf_token,
+                label=str(name),
+            )
+            last_error = None
+            break
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            print(f"{_CKPT_LOG} DOWNLOAD FAILED: HTTP {exc.code} {exc.reason} ({url})")
+        except Exception as exc:
+            last_error = exc
+            print(f"{_CKPT_LOG} DOWNLOAD FAILED: {exc} ({url})")
+
+    if not target.is_file():
+        detail = str(last_error) if last_error else "unknown error"
+        raise RuntimeError(f"{_CKPT_LOG} could not download {filename!r}: {detail}")
+    return target
+
+
+def ensure_checkpoints_from_json(
+    checkpoints_json: str,
+    *,
+    civitai_token: str = "",
+    hf_token: str = "",
+) -> list[str]:
+    """Parse a JSON list of checkpoint dicts and ensure each file exists."""
+    import json
+
+    raw = (checkpoints_json or "").strip()
+    if not raw:
+        return []
+    try:
+        entries = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{_CKPT_LOG} invalid checkpoints_json: {exc}") from exc
+    if not isinstance(entries, list):
+        raise RuntimeError(f"{_CKPT_LOG} checkpoints_json must be a JSON array")
+    applied: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        path = ensure_checkpoint_file(
+            entry,
+            civitai_token=civitai_token,
+            hf_token=hf_token,
+        )
+        applied.append(path.name)
+    return applied
+
+
+def checkpoint_entry_for_name(
+    checkpoints_json: str,
+    ckpt_name: str,
+) -> dict[str, Any] | None:
+    """Return the manifest row matching *ckpt_name*, if any."""
+    import json
+
+    name = (ckpt_name or "").strip()
+    if not name:
+        return None
+    raw = (checkpoints_json or "").strip()
+    if not raw:
+        return None
+    try:
+        entries = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(entries, list):
+        return None
+    key = name.lower()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        filename = str(entry.get("filename") or "").strip()
+        if filename.lower() == key:
+            return entry
+    return None

@@ -9,6 +9,7 @@ LoRA download support for **ComfySprites** Make and Video Lab. The ComfySprites 
 
 | Node | Role |
 |------|------|
+| **ComfySprites Ensure Checkpoint Loader** | Download SDXL checkpoints from `checkpoints_json`, then load `MODEL` + `CLIP` + `VAE` |
 | **ComfySprites Ensure SDXL LoRAs** | Download SDXL LoRAs from `loras_json`, pass `MODEL` + `CLIP` through |
 | **ComfySprites Ensure LTX LoRAs** | Download LTX LoRAs from `loras_json`, pass `MODEL` through |
 | **ComfySprites Export Image** | Strip metadata and compress stills (WebP/JPEG/PNG) before ComfySprites download |
@@ -19,6 +20,7 @@ LoRA download support for **ComfySprites** Make and Video Lab. The ComfySprites 
 
 | Input | Description |
 |-------|-------------|
+| `checkpoints_json` | JSON array of checkpoint rows from Style (`filename`, `download_url`, `version_id`, …) |
 | `loras_json` | JSON array of LoRA rows (`filename`, `download_url`, `version_id`, …) |
 | `civitai_token` | From ComfySprites **Settings** (workspace `.env`) |
 | `hf_token` | From ComfySprites **Settings** |
@@ -39,8 +41,8 @@ Restart ComfyUI. Photo / Video Lab queueing requires these node types on the Com
 
 ## v1 scope
 
-- **LoRAs only** — not checkpoints, VAE, or upscale weights
-- Checkpoints must already exist under `models/checkpoints/`
+- **SDXL checkpoints + LoRAs + ControlNets** — auto-download when Style / catalog rows include `download_url` or `version_id`
+- VAE and upscale weights must already exist on the ComfyUI host
 
 ## Docs
 
@@ -50,6 +52,6 @@ Restart ComfyUI. Photo / Video Lab queueing requires these node types on the Com
 
 | Path | Role |
 |------|------|
-| `comfysprites_assets/download.py` | Civitai / HF download into `models/loras/` |
+| `comfysprites_assets/download.py` | Civitai / HF download into `models/loras/`, `models/checkpoints/`, `models/controlnet/` |
 | `nodes.py` | ComfyUI node registrations |
 | `comfysprites_export/` | Strip metadata + compress image/audio/video helpers |
