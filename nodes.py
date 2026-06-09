@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .comfysprites_assets.download import ensure_all_assets
 from .comfysprites_assets.download import ensure_loras_from_json
-from .comfysprites_assets.paths import checkpoints_dir, loras_dir
+from .comfysprites_assets.paths import checkpoints_dir, controlnet_dir, loras_dir
 from .comfysprites_export import export_audio, export_images, mux_video
 
 _LOG = "[ComfySprites]"
@@ -195,6 +195,58 @@ class ComfySpritesLoraLoader:
         return (model_lora, clip_lora)
 
 
+class ComfySpritesControlNetLoader:
+    """Load a ControlNet file already on disk (after Downloader)."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "control_net_name": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": "ControlNet filename under models/controlnet/.",
+                    },
+                ),
+                "assets_ready": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": "Wire from Downloader output so loads run after downloads.",
+                    },
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("CONTROL_NET",)
+    RETURN_NAMES = ("control_net",)
+    FUNCTION = "load_controlnet"
+    CATEGORY = "ComfySprites"
+
+    def load_controlnet(self, control_net_name: str, assets_ready: str):
+        import folder_paths
+        import comfy.controlnet
+        from pathlib import Path
+
+        del assets_ready
+        name = (control_net_name or "").strip()
+        if not name:
+            raise RuntimeError(f"{_LOG} control_net_name is empty")
+
+        cn_path = folder_paths.get_full_path("controlnet", name)
+        if not cn_path:
+            cn_path = str(controlnet_dir() / name)
+        if not cn_path or not Path(cn_path).is_file():
+            raise RuntimeError(
+                f"{_LOG} ControlNet {name!r} not found under models/controlnet/"
+            )
+
+        controlnet = comfy.controlnet.load_controlnet(cn_path)
+        print(f"{_LOG} ControlNet loaded: {name}")
+        return (controlnet,)
+
+
 class ComfySpritesEnsureLTXLoras:
     """Download LTX LoRAs from ``loras_json``, then pass model through unchanged."""
 
@@ -354,6 +406,7 @@ NODE_CLASS_MAPPINGS = {
     "ComfySpritesDownloader": ComfySpritesDownloader,
     "ComfySpritesSDXLLoader": ComfySpritesSDXLLoader,
     "ComfySpritesLoraLoader": ComfySpritesLoraLoader,
+    "ComfySpritesControlNetLoader": ComfySpritesControlNetLoader,
     "ComfySpritesEnsureLTXLoras": ComfySpritesEnsureLTXLoras,
     "ComfySpritesExportImage": ComfySpritesExportImage,
     "ComfySpritesExportAudio": ComfySpritesExportAudio,
@@ -364,6 +417,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ComfySpritesDownloader": "ComfySprites Downloader",
     "ComfySpritesSDXLLoader": "ComfySprites SDXL Loader",
     "ComfySpritesLoraLoader": "ComfySprites LoRA Loader",
+    "ComfySpritesControlNetLoader": "ComfySprites ControlNet Loader",
     "ComfySpritesEnsureLTXLoras": "ComfySprites Ensure LTX LoRAs",
     "ComfySpritesExportImage": "ComfySprites Export Image",
     "ComfySpritesExportAudio": "ComfySprites Export Audio",
