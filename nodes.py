@@ -43,6 +43,18 @@ class ComfySpritesDownloader:
                     "STRING",
                     {"multiline": True, "default": "[]"},
                 ),
+                "diffusion_models_json": (
+                    "STRING",
+                    {"multiline": True, "default": "[]"},
+                ),
+                "text_encoders_json": (
+                    "STRING",
+                    {"multiline": True, "default": "[]"},
+                ),
+                "vae_json": (
+                    "STRING",
+                    {"multiline": True, "default": "[]"},
+                ),
                 "civitai_token": ("STRING", {"default": ""}),
                 "hf_token": ("STRING", {"default": ""}),
             }
@@ -61,6 +73,9 @@ class ComfySpritesDownloader:
         controlnets_json: str,
         upscalers_json: str,
         detailers_json: str,
+        diffusion_models_json: str,
+        text_encoders_json: str,
+        vae_json: str,
         civitai_token: str,
         hf_token: str,
     ):
@@ -77,6 +92,9 @@ class ComfySpritesDownloader:
             controlnets_json=controlnets_json,
             upscalers_json=upscalers_json,
             detailers_json=detailers_json,
+            diffusion_models_json=diffusion_models_json,
+            text_encoders_json=text_encoders_json,
+            vae_json=vae_json,
         )
         pbar = ProgressBar(pending) if ProgressBar is not None and pending > 0 else None
 
@@ -90,6 +108,9 @@ class ComfySpritesDownloader:
             controlnets_json=controlnets_json,
             upscalers_json=upscalers_json,
             detailers_json=detailers_json,
+            diffusion_models_json=diffusion_models_json,
+            text_encoders_json=text_encoders_json,
+            vae_json=vae_json,
             civitai_token=civitai_token or "",
             hf_token=hf_token or "",
             on_progress=_on_asset_progress if pbar is not None else None,
@@ -98,7 +119,19 @@ class ComfySpritesDownloader:
             pbar.update_absolute(pending, pending)
         name = (ckpt_name or "").strip()
         if not name:
-            raise RuntimeError(f"{_LOG} ckpt_name is empty")
+            for key in (
+                "diffusion_models",
+                "text_encoders",
+                "vae",
+                "loras",
+                "checkpoints",
+            ):
+                rows = applied.get(key) or []
+                if rows:
+                    name = str(rows[0]).strip()
+                    break
+            if not name:
+                name = "assets-ready"
         parts: list[str] = []
         if applied["checkpoints"]:
             parts.append(f"checkpoints={', '.join(applied['checkpoints'])}")
@@ -110,6 +143,12 @@ class ComfySpritesDownloader:
             parts.append(f"upscalers={', '.join(applied['upscalers'])}")
         if applied["detailers"]:
             parts.append(f"detailers={', '.join(applied['detailers'])}")
+        if applied["diffusion_models"]:
+            parts.append(f"diffusion_models={', '.join(applied['diffusion_models'])}")
+        if applied["text_encoders"]:
+            parts.append(f"text_encoders={', '.join(applied['text_encoders'])}")
+        if applied["vae"]:
+            parts.append(f"vae={', '.join(applied['vae'])}")
         if parts:
             print(f"{_LOG} downloaded: {'; '.join(parts)}")
         print(f"{_LOG} assets ready; inference checkpoint: {name}")

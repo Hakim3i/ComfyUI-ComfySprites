@@ -83,3 +83,42 @@ def sams_dir() -> Path:
     except Exception:
         pass
     return PACKAGE_DIR.parent.parent / "models" / "sams"
+
+
+def diffusion_models_dir() -> Path:
+    """Resolve ComfyUI ``models/diffusion_models``."""
+    try:
+        import folder_paths  # type: ignore[import-not-found]
+
+        paths = folder_paths.get_folder_paths("diffusion_models")
+        if paths:
+            return Path(paths[0])
+    except Exception:
+        pass
+    return PACKAGE_DIR.parent.parent / "models" / "diffusion_models"
+
+
+def text_encoders_dir() -> Path:
+    """Resolve ComfyUI ``models/text_encoders``."""
+    try:
+        import folder_paths  # type: ignore[import-not-found]
+
+        paths = folder_paths.get_folder_paths("text_encoders")
+        if paths:
+            return Path(paths[0])
+    except Exception:
+        pass
+    return PACKAGE_DIR.parent.parent / "models" / "text_encoders"
+
+
+def vae_dir() -> Path:
+    """Resolve ComfyUI ``models/vae``."""
+    try:
+        import folder_paths  # type: ignore[import-not-found]
+
+        paths = folder_paths.get_folder_paths("vae")
+        if paths:
+            return Path(paths[0])
+    except Exception:
+        pass
+    return PACKAGE_DIR.parent.parent / "models" / "vae"

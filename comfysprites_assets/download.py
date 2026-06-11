@@ -17,10 +17,13 @@ from .download_utils import (
 from .paths import (
     checkpoints_dir,
     controlnet_dir,
+    diffusion_models_dir,
     loras_dir,
     sams_dir,
+    text_encoders_dir,
     ultralytics_dir,
     upscale_models_dir,
+    vae_dir,
 )
 
 _LOG = "[ComfySprites LoRA]"
@@ -28,6 +31,9 @@ _CN_LOG = "[ComfySprites ControlNet]"
 _CKPT_LOG = "[ComfySprites Checkpoint]"
 _UP_LOG = "[ComfySprites Upscale]"
 _DT_LOG = "[ComfySprites Detailer]"
+_DM_LOG = "[ComfySprites DiffusionModel]"
+_TE_LOG = "[ComfySprites TextEncoder]"
+_VAE_LOG = "[ComfySprites VAE]"
 
 
 @dataclass
@@ -75,6 +81,10 @@ def _detailer_target_path(entry: dict[str, Any]) -> Path | None:
     return base / rel
 
 
+def _model_target_path(base_dir: Path, filename: str) -> Path:
+    return base_dir / filename
+
+
 def count_pending_assets(
     *,
     checkpoints_json: str = "",
@@ -82,6 +92,9 @@ def count_pending_assets(
     controlnets_json: str = "",
     upscalers_json: str = "",
     detailers_json: str = "",
+    diffusion_models_json: str = "",
+    text_encoders_json: str = "",
+    vae_json: str = "",
 ) -> int:
     """Count manifest rows that still need downloading (not already on disk)."""
     pending = 0
@@ -104,6 +117,18 @@ def count_pending_assets(
     for entry in _parse_json_array(detailers_json, log=_DT_LOG):
         target = _detailer_target_path(entry)
         if target is not None and not target.is_file():
+            pending += 1
+    for entry in _parse_json_array(diffusion_models_json, log=_DM_LOG):
+        filename = str(entry.get("filename") or "").strip()
+        if filename and not _model_target_path(diffusion_models_dir(), filename).is_file():
+            pending += 1
+    for entry in _parse_json_array(text_encoders_json, log=_TE_LOG):
+        filename = str(entry.get("filename") or "").strip()
+        if filename and not _model_target_path(text_encoders_dir(), filename).is_file():
+            pending += 1
+    for entry in _parse_json_array(vae_json, log=_VAE_LOG):
+        filename = str(entry.get("filename") or "").strip()
+        if filename and not _model_target_path(vae_dir(), filename).is_file():
             pending += 1
     return pending
 
@@ -562,6 +587,128 @@ def ensure_checkpoints_from_json(
     return applied
 
 
+def _ensure_folder_file(
+    info: dict[str, Any],
+    *,
+    base_dir: Path,
+    log: str,
+    civitai_token: str = "",
+    hf_token: str = "",
+    progress: _DownloadProgress | None = None,
+) -> Path:
+    filename = info.get("filename")
+    name = info.get("name") or filename or "?"
+    if not filename or not str(filename).strip():
+        raise RuntimeError(f"{log} catalog entry missing filename ({name!r})")
+    filename = str(filename).strip()
+    target = _model_target_path(base_dir, filename)
+    if target.is_file():
+        print(f"{log} {filename}: on disk ({_format_mb(target.stat().st_size)})")
+        return target
+
+    urls = download_candidates(info)
+    if not urls:
+        raise RuntimeError(f"{log} {filename!r}: missing download_url")
+
+    civitai_token = (civitai_token or "").strip()
+    hf_token = (hf_token or "").strip()
+    last_error: Exception | None = None
+    file_progress = progress.file_bytes if progress is not None else None
+    for idx, url in enumerate(urls):
+        src = "huggingface" if is_huggingface_url(url) else "civitai"
+        try:
+            if idx:
+                print(f"{log} retrying with {src} mirror ({idx + 1}/{len(urls)})")
+            _download_file(
+                url,
+                target,
+                civitai_token=civitai_token,
+                hf_token=hf_token,
+                label=str(name),
+                log=log,
+                on_file_progress=file_progress,
+            )
+            last_error = None
+            break
+        except Exception as exc:
+            last_error = exc
+            print(f"{log} DOWNLOAD FAILED: {_format_download_error(exc)} ({url})")
+
+    if not target.is_file():
+        raise RuntimeError(
+            f"{log} could not download {filename!r}: {_format_download_error(last_error)}"
+        )
+    if progress is not None:
+        progress.file_finished()
+    return target
+
+
+def ensure_diffusion_models_from_json(
+    diffusion_models_json: str,
+    *,
+    civitai_token: str = "",
+    hf_token: str = "",
+    progress: _DownloadProgress | None = None,
+) -> list[str]:
+    applied: list[str] = []
+    for entry in _parse_json_array(diffusion_models_json, log=_DM_LOG):
+        path = _ensure_folder_file(
+            entry,
+            base_dir=diffusion_models_dir(),
+            log=_DM_LOG,
+            civitai_token=civitai_token,
+            hf_token=hf_token,
+            progress=progress,
+        )
+        rel = str(entry.get("filename") or path.name).strip()
+        applied.append(rel)
+    return applied
+
+
+def ensure_text_encoders_from_json(
+    text_encoders_json: str,
+    *,
+    civitai_token: str = "",
+    hf_token: str = "",
+    progress: _DownloadProgress | None = None,
+) -> list[str]:
+    applied: list[str] = []
+    for entry in _parse_json_array(text_encoders_json, log=_TE_LOG):
+        path = _ensure_folder_file(
+            entry,
+            base_dir=text_encoders_dir(),
+            log=_TE_LOG,
+            civitai_token=civitai_token,
+            hf_token=hf_token,
+            progress=progress,
+        )
+        rel = str(entry.get("filename") or path.name).strip()
+        applied.append(rel)
+    return applied
+
+
+def ensure_vae_from_json(
+    vae_json: str,
+    *,
+    civitai_token: str = "",
+    hf_token: str = "",
+    progress: _DownloadProgress | None = None,
+) -> list[str]:
+    applied: list[str] = []
+    for entry in _parse_json_array(vae_json, log=_VAE_LOG):
+        path = _ensure_folder_file(
+            entry,
+            base_dir=vae_dir(),
+            log=_VAE_LOG,
+            civitai_token=civitai_token,
+            hf_token=hf_token,
+            progress=progress,
+        )
+        rel = str(entry.get("filename") or path.name).strip()
+        applied.append(rel)
+    return applied
+
+
 def ensure_all_assets(
     *,
     checkpoints_json: str = "",
@@ -569,6 +716,9 @@ def ensure_all_assets(
     controlnets_json: str = "",
     upscalers_json: str = "",
     detailers_json: str = "",
+    diffusion_models_json: str = "",
+    text_encoders_json: str = "",
+    vae_json: str = "",
     civitai_token: str = "",
     hf_token: str = "",
     on_progress: Callable[[float], None] | None = None,
@@ -582,6 +732,9 @@ def ensure_all_assets(
         controlnets_json=controlnets_json,
         upscalers_json=upscalers_json,
         detailers_json=detailers_json,
+        diffusion_models_json=diffusion_models_json,
+        text_encoders_json=text_encoders_json,
+        vae_json=vae_json,
     )
     progress = (
         _DownloadProgress(total=pending, on_progress=on_progress)
@@ -615,6 +768,24 @@ def ensure_all_assets(
         ),
         "detailers": ensure_detailers_from_json(
             detailers_json,
+            civitai_token=civitai_token,
+            hf_token=hf_token,
+            progress=progress,
+        ),
+        "diffusion_models": ensure_diffusion_models_from_json(
+            diffusion_models_json,
+            civitai_token=civitai_token,
+            hf_token=hf_token,
+            progress=progress,
+        ),
+        "text_encoders": ensure_text_encoders_from_json(
+            text_encoders_json,
+            civitai_token=civitai_token,
+            hf_token=hf_token,
+            progress=progress,
+        ),
+        "vae": ensure_vae_from_json(
+            vae_json,
             civitai_token=civitai_token,
             hf_token=hf_token,
             progress=progress,
